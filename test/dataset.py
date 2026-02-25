@@ -93,3 +93,49 @@ class cityscapes(Dataset):
     def __len__(self):
         return len(self.filenames)
 
+
+class ctem(Dataset):
+
+    def __init__(self, root, input_transform=None, target_transform=None, subset='val'):
+        if subset == 'test':
+            base_root = os.path.join(root, 'TestSet')
+            list_path = os.path.join(base_root, 'ImageSets', 'test.txt')
+        else:
+            base_root = root
+            list_path = os.path.join(root, 'ImageSets', subset + '.txt')
+
+        self.images_root = os.path.join(base_root, 'JPEGImages')
+        self.labels_root = os.path.join(base_root, 'SegmentationClass')
+
+        self.filenames = []
+        self.filenamesGt = []
+        with open(list_path, 'r') as handle:
+            for line in handle:
+                name = line.strip()
+                if not name:
+                    continue
+                self.filenames.append(os.path.join(self.images_root, name + '.jpg'))
+                self.filenamesGt.append(os.path.join(self.labels_root, name + '.png'))
+
+        self.input_transform = input_transform
+        self.target_transform = target_transform
+
+    def __getitem__(self, index):
+        filename = self.filenames[index]
+        filenameGt = self.filenamesGt[index]
+
+        with open(filename, 'rb') as f:
+            image = load_image(f).convert('RGB')
+        with open(filenameGt, 'rb') as f:
+            label = load_image(f).convert('P')
+
+        if self.input_transform is not None:
+            image = self.input_transform(image)
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+
+        return image, label, filename, filenameGt
+
+    def __len__(self):
+        return len(self.filenames)
+

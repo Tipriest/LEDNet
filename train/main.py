@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import math
 import sys
+import torch.nn.functional as F
 
 cur_path = os.path.abspath(os.path.dirname(__file__))
 root_path = os.path.split(cur_path)[0]
@@ -21,7 +22,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
 from torchvision.transforms import ToTensor, ToPILImage
 
-from utils.dataset import VOC12,cityscapes
+from utils.dataset import VOC12, cityscapes, ctem
 from utils.transform import Relabel, ToLabel, Colorize
 from utils.visualize import Dashboard
 from utils.loss import CrossEntropyLoss2d
@@ -39,15 +40,18 @@ image_transform = ToPILImage()
 
 #Augmentations - different function implemented to perform random augments on both image and target
 class MyCoTransform(object):
-    def __init__(self, enc, augment=True, height=512):
+    def __init__(self, enc, augment=True, height=512, width=1024, ignore_label=255, relabel_to=None):
         self.enc=enc
         self.augment = augment
         self.height = height
+        self.width = width
+        self.ignore_label = ignore_label
+        self.relabel_to = relabel_to
         pass
     def __call__(self, input, target):
         # do something to both images
-        input =  Resize(self.height, Image.BILINEAR)(input)
-        target = Resize(self.height, Image.NEAREST)(target)
+        input = Resize((self.height, self.width), Image.BILINEAR)(input)
+        target = Resize((self.height, self.width), Image.NEAREST)(target)
 
         if(self.augment):
             # Random hflip
@@ -67,14 +71,37 @@ class MyCoTransform(object):
 
         input = ToTensor()(input)
         if (self.enc):
-            target = Resize(int(self.height/8), Image.NEAREST)(target)
+            target = Resize((int(self.height/8), int(self.width/8)), Image.NEAREST)(target)
         target = ToLabel()(target)
-        target = Relabel(255, 19)(target)
+        if self.relabel_to is not None:
+            target = Relabel(self.ignore_label, self.relabel_to)(target)
 
         return input, target
 
 
 
+
+
+def reset_cuda_mem():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+
+
+def print_cuda_mem(tag=""):
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        alloc = torch.cuda.memory_allocated() / 1024**2
+        reserved = torch.cuda.memory_reserved() / 1024**2
+        peak = torch.cuda.max_memory_allocated() / 1024**2
+        print(f"[CUDA Mem] {tag} | allocated={alloc:.1f} MB, reserved={reserved:.1f} MB, peak={peak:.1f} MB")
+
+
+def _resize_target_like(output, target):
+    if output.shape[2:] != target.shape[2:]:
+        target = F.interpolate(target.float(), size=output.shape[2:], mode='nearest').long()
+    return target
 
 
 def train(args, model, enc=False):
@@ -84,62 +111,69 @@ def train(args, model, enc=False):
     #create a loder to run all images and calculate histogram of labels, then create weight array using class balancing
 
     weight = torch.ones(NUM_CLASSES)
-    if (enc):
-        weight[0] = 2.3653597831726	
-        weight[1] = 4.4237880706787	
-        weight[2] = 2.9691488742828	
-        weight[3] = 5.3442072868347	
-        weight[4] = 5.2983593940735	
-        weight[5] = 5.2275490760803	
-        weight[6] = 5.4394111633301	
-        weight[7] = 5.3659925460815	
-        weight[8] = 3.4170460700989	
-        weight[9] = 5.2414722442627	
-        weight[10] = 4.7376127243042	
-        weight[11] = 5.2286224365234	
-        weight[12] = 5.455126285553	
-        weight[13] = 4.3019247055054	
-        weight[14] = 5.4264230728149	
-        weight[15] = 5.4331531524658	
-        weight[16] = 5.433765411377	
-        weight[17] = 5.4631009101868	
-        weight[18] = 5.3947434425354
-    else:
-        weight[0] = 2.8149201869965	
-        weight[1] = 6.9850029945374	
-        weight[2] = 3.7890393733978	
-        weight[3] = 9.9428062438965	
-        weight[4] = 9.7702074050903	
-        weight[5] = 9.5110931396484	
-        weight[6] = 10.311357498169	
-        weight[7] = 10.026463508606	
-        weight[8] = 4.6323022842407	
-        weight[9] = 9.5608062744141	
-        weight[10] = 7.8698215484619	
-        weight[11] = 9.5168733596802	
-        weight[12] = 10.373730659485	
-        weight[13] = 6.6616044044495	
-        weight[14] = 10.260489463806	
-        weight[15] = 10.287888526917	
-        weight[16] = 10.289801597595	
-        weight[17] = 10.405355453491	
-        weight[18] = 10.138095855713	
+    if args.dataset == 'cityscapes':
+        if (enc):
+            weight[0] = 2.3653597831726
+            weight[1] = 4.4237880706787
+            weight[2] = 2.9691488742828
+            weight[3] = 5.3442072868347
+            weight[4] = 5.2983593940735
+            weight[5] = 5.2275490760803
+            weight[6] = 5.4394111633301
+            weight[7] = 5.3659925460815
+            weight[8] = 3.4170460700989
+            weight[9] = 5.2414722442627
+            weight[10] = 4.7376127243042
+            weight[11] = 5.2286224365234
+            weight[12] = 5.455126285553
+            weight[13] = 4.3019247055054
+            weight[14] = 5.4264230728149
+            weight[15] = 5.4331531524658
+            weight[16] = 5.433765411377
+            weight[17] = 5.4631009101868
+            weight[18] = 5.3947434425354
+        else:
+            weight[0] = 2.8149201869965
+            weight[1] = 6.9850029945374
+            weight[2] = 3.7890393733978
+            weight[3] = 9.9428062438965
+            weight[4] = 9.7702074050903
+            weight[5] = 9.5110931396484
+            weight[6] = 10.311357498169
+            weight[7] = 10.026463508606
+            weight[8] = 4.6323022842407
+            weight[9] = 9.5608062744141
+            weight[10] = 7.8698215484619
+            weight[11] = 9.5168733596802
+            weight[12] = 10.373730659485
+            weight[13] = 6.6616044044495
+            weight[14] = 10.260489463806
+            weight[15] = 10.287888526917
+            weight[16] = 10.289801597595
+            weight[17] = 10.405355453491
+            weight[18] = 10.138095855713
 
-    weight[19] = 0
+        weight[19] = 0
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
-    co_transform = MyCoTransform(enc, augment=True, height=args.height)#512)
-    co_transform_val = MyCoTransform(enc, augment=False, height=args.height)#512)
-    dataset_train = cityscapes(args.datadir, co_transform, 'train')
-    dataset_val = cityscapes(args.datadir, co_transform_val, 'val')
+    co_transform = MyCoTransform(enc, augment=True, height=args.height, width=args.width,
+                                 ignore_label=args.ignore_label, relabel_to=None)
+    co_transform_val = MyCoTransform(enc, augment=False, height=args.height, width=args.width,
+                                     ignore_label=args.ignore_label, relabel_to=None)
+    if args.dataset == 'ctem':
+        dataset_train = ctem(args.datadir, co_transform, 'train')
+        dataset_val = ctem(args.datadir, co_transform_val, 'val')
+    else:
+        dataset_train = cityscapes(args.datadir, co_transform, 'train')
+        dataset_val = cityscapes(args.datadir, co_transform_val, 'val')
 
     loader = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
     loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
 
     if args.cuda:
         weight = weight.cuda()
-    criterion = CrossEntropyLoss2d(weight)
+    criterion = CrossEntropyLoss2d(weight, ignore_label=args.ignore_label)
     print(type(criterion))
 
     savedir = f'../save/{args.savedir}'
@@ -191,6 +225,9 @@ def train(args, model, enc=False):
     for epoch in range(start_epoch, args.num_epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
 
+        if args.cuda_mem:
+            reset_cuda_mem()
+
         scheduler.step(epoch)    ## scheduler 2
 
         epoch_loss = []
@@ -200,7 +237,7 @@ def train(args, model, enc=False):
         doIouVal =  args.iouVal      
 
         if (doIouTrain):
-            iouEvalTrain = iouEval(NUM_CLASSES)
+            iouEvalTrain = iouEval(NUM_CLASSES, ignoreIndex=-1, ignore_label_value=args.ignore_label)
 
         usedLr = 0
         for param_group in optimizer.param_groups:
@@ -221,11 +258,12 @@ def train(args, model, enc=False):
                 targets = labels.cuda()           
             
             outputs = model(inputs, only_encode=enc)
+            targets = _resize_target_like(outputs, targets)
 
             #print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
 
             optimizer.zero_grad()
-            loss = criterion(outputs, targets[:, 0])    
+            loss = criterion(outputs, targets[:, 0])
             
             loss.backward()
             optimizer.step()
@@ -277,7 +315,7 @@ def train(args, model, enc=False):
         time_val = []
 
         if (doIouVal):
-            iouEvalVal = iouEval(NUM_CLASSES)
+            iouEvalVal = iouEval(NUM_CLASSES, ignoreIndex=-1, ignore_label_value=args.ignore_label)
 
         for step, (images, labels) in enumerate(loader_val):
             start_time = time.time()
@@ -294,7 +332,8 @@ def train(args, model, enc=False):
                 inputs = Variable(images)     
                 targets = Variable(labels)
             
-            outputs = model(inputs, only_encode=enc) 
+            outputs = model(inputs, only_encode=enc)
+            targets = _resize_target_like(outputs, targets)
 
             loss = criterion(outputs, targets[:, 0])
             epoch_loss_val.append(loss.item())
@@ -334,6 +373,9 @@ def train(args, model, enc=False):
             iouVal, iou_classes = iouEvalVal.getIoU()
             iouStr = getColorEntry(iouVal)+'{:0.2f}'.format(iouVal*100) + '\033[0m'
             print ("EPOCH IoU on VAL set: ", iouStr, "%") 
+
+        if args.cuda_mem:
+            print_cuda_mem(tag=f"epoch-{epoch}")
            
 
         # remember best valIoU and save checkpoint
@@ -392,6 +434,13 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
 
 
 def main(args):
+    global NUM_CLASSES
+    global color_transform
+    if args.dataset == 'ctem':
+        NUM_CLASSES = 6
+    else:
+        NUM_CLASSES = 20
+    color_transform = Colorize(NUM_CLASSES)
     savedir = f'../save/{args.savedir}'
 
     if not os.path.exists(savedir):
@@ -401,10 +450,13 @@ def main(args):
         myfile.write(str(args))
 
     #Load Model
-    assert os.path.exists(args.model + ".py"), "Error: model definition not found"
+    model_path = args.model + ".py"
+    if not os.path.exists(model_path):
+        model_path = os.path.join(cur_path, args.model + ".py")
+    assert os.path.exists(model_path), "Error: model definition not found"
     model_file = importlib.import_module(args.model)
-    model = model_file.Net(NUM_CLASSES) 
-    copyfile(args.model + ".py", savedir + '/' + args.model + ".py")
+    model = model_file.Net(NUM_CLASSES)
+    copyfile(model_path, savedir + '/' + args.model + ".py")
     
     if args.cuda:
         model = torch.nn.DataParallel(model).cuda()
@@ -489,9 +541,12 @@ if __name__ == '__main__':
     parser.add_argument('--model', default= "lednet")
     parser.add_argument('--state')
 
+    parser.add_argument('--dataset', default='cityscapes', choices=['cityscapes', 'ctem'])
+
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default=os.getenv("HOME") + "/datasets/cityscapes/")
     parser.add_argument('--height', type=int, default=512)
+    parser.add_argument('--width', type=int, default=1024)
     parser.add_argument('--num-epochs', type=int, default=300)
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--batch-size', type=int, default=5)
@@ -502,9 +557,18 @@ if __name__ == '__main__':
     parser.add_argument('--decoder', action='store_true')
     parser.add_argument('--pretrainedEncoder') #, default=" ")
     parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--ignore-label', type=int, default=255)
+    parser.add_argument('--cuda-mem', action='store_true')
 
     parser.add_argument('--iouTrain', action='store_true', default=True) #recommended: False (takes more time to train otherwise)
     parser.add_argument('--iouVal', action='store_true', default=True)  
     parser.add_argument('--resume', action='store_true')    #Use this flag to load last checkpoint for training  
 
-    main(parser.parse_args())
+    args = parser.parse_args()
+
+    if args.dataset == 'ctem':
+        args.height = 540
+        args.width = 960
+        args.ignore_label = 255
+
+    main(args)

@@ -2,9 +2,10 @@ import torch
 
 class iouEval:
 
-    def __init__(self, nClasses, ignoreIndex=19):
+    def __init__(self, nClasses, ignoreIndex=19, ignore_label_value=None):
         self.nClasses = nClasses
-        self.ignoreIndex = ignoreIndex if nClasses>ignoreIndex else -1 #if ignoreIndex is larger than nClasses, consider no ignoreIndex
+        self.ignoreIndex = ignoreIndex if nClasses > ignoreIndex else -1
+        self.ignore_label_value = ignore_label_value
         self.reset()
 
     def reset (self):
@@ -32,7 +33,12 @@ class iouEval:
         else:
             x_onehot = x.float()
 
+        ignores = 0
         if (y.size(1) == 1):
+            if self.ignore_label_value is not None:
+                ignores = (y == self.ignore_label_value).float()
+                y = y.clone()
+                y[y == self.ignore_label_value] = 0
             y_onehot = torch.zeros(y.size(0), self.nClasses, y.size(2), y.size(3))
             if y.is_cuda:
                 y_onehot = y_onehot.cuda()
@@ -40,12 +46,10 @@ class iouEval:
         else:
             y_onehot = y.float()
 
-        if (self.ignoreIndex != -1): 
-            ignores = y_onehot[:,self.ignoreIndex].unsqueeze(1)
+        if (self.ignoreIndex != -1):
+            ignores = y_onehot[:, self.ignoreIndex].unsqueeze(1)
             x_onehot = x_onehot[:, :self.ignoreIndex]
             y_onehot = y_onehot[:, :self.ignoreIndex]
-        else:
-            ignores=0
 
         #print(type(x_onehot))
         #print(type(y_onehot))

@@ -34,28 +34,28 @@ The extensive computational burden limits the usage of CNNs in mobile devices fo
 |  └── dataset.py # dataloader for cityscapes dataset
 |  └── iouEval.py # for test 'iou mean' and 'iou per class'
 |  └── transform.py # data preprocessing
-|  └── visualize.py # Visualize with visdom 
-|  └── loss.py # loss function 
+|  └── visualize.py # Visualize with visdom
+|  └── loss.py # loss function
 ├── checkpoint
 |  └── xxx.pth # pretrained models encoder form ImageNet
 ├── save
-|  └── xxx.pth # trained models form scratch 
+|  └── xxx.pth # trained models form scratch
 ├── imagenet-pretrain
-|  └── lednet_imagenet.py # 
-|  └── main.py # 
+|  └── lednet_imagenet.py #
+|  └── main.py #
 ├── train
 |  └── lednet.py  # model definition for semantic segmentation
 |  └── main.py # train model scripts
 ├── test
-|  |  └── dataset.py 
+|  |  └── dataset.py
 |  |  └── lednet.py # model definition
 |  |  └── lednet_no_bn.py # Remove the BN layer in model definition
 |  |  └── eval_cityscapes_color.py # Test the results to generate RGB images
 |  |  └── eval_cityscapes_server.py # generate result uploaded official server
 |  |  └── eval_forward_time.py # Test model inference time
-|  |  └── eval_iou.py 
-|  |  └── iouEval.py 
-|  |  └── transform.py 
+|  |  └── eval_iou.py
+|  |  └── iouEval.py
+|  |  └── transform.py
 ```
 
 #### Installation
@@ -66,7 +66,7 @@ The extensive computational burden limits the usage of CNNs in mobile devices fo
 pip3 install -r requirements.txt
 ```
 
-- Env: PyTorch_0.4.1; cuda_9.0; cudnn_7.1; python_3.6, 
+- Env: PyTorch_0.4.1; cuda_9.0; cudnn_7.1; python_3.6,
 
 - Clone this repository.
 
@@ -172,3 +172,21 @@ If you find this code useful for your research, please use the following BibTeX 
 [python-url]: https://www.python.org/
 [pytorch-image]: https://img.shields.io/badge/PyTorch-1.0-2BAF2B.svg
 [pytorch-url]: https://pytorch.org/
+
+python train/main.py \
+  --dataset ctem \
+  --datadir /home/tipriest/Documents/CVTask/CTEM \
+  --savedir ctem_lednet \
+  --batch-size 1 \
+  --num-epochs 300 \
+  --cuda-mem
+
+python test/eval_iou.py \
+  --dataset ctem \
+  --subset test \
+  --datadir /home/tipriest/Documents/CVTask/CTEM \
+  --loadDir ../save/ctem_lednet/ \
+  --loadWeights model_best.pth \
+  --loadModel lednet.py \
+  --batch-size 1 \
+  --cuda-mem
