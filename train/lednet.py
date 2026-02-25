@@ -15,25 +15,25 @@ def split(x):
 
 def channel_shuffle(x,groups):
     batchsize, num_channels, height, width = x.data.size()
-    
+
     channels_per_group = num_channels // groups
-    
+
     # reshape
     x = x.view(batchsize,groups,
         channels_per_group,height,width)
-    
+
     x = torch.transpose(x,1,2).contiguous()
-    
+
     # flatten
     x = x.view(batchsize,-1,height,width)
-    
+
     return x
-    
+
 
 class Conv2dBnRelu(nn.Module):
     def __init__(self,in_ch,out_ch,kernel_size=3,stride=1,padding=0,dilation=1,bias=True):
         super(Conv2dBnRelu,self).__init__()
-		
+
         self.conv = nn.Sequential(
 		nn.Conv2d(in_ch,out_ch,kernel_size,stride,padding,dilation=dilation,bias=bias),
 		nn.BatchNorm2d(out_ch, eps=1e-3),
@@ -83,11 +83,11 @@ class DownsamplerBlock (nn.Module):
 
 
 class SS_nbt_module(nn.Module):
-    def __init__(self, chann, dropprob, dilated):        
+    def __init__(self, chann, dropprob, dilated):
         super().__init__()
 
         oup_inc = chann//2
-        
+
         # dw
         self.conv3x1_1_l = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), bias=True)
 
@@ -100,7 +100,7 @@ class SS_nbt_module(nn.Module):
         self.conv1x3_2_l = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), bias=True, dilation = (1,dilated))
 
         self.bn2_l = nn.BatchNorm2d(oup_inc, eps=1e-03)
-        
+
         # dw
         self.conv3x1_1_r = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), bias=True)
 
@@ -112,15 +112,15 @@ class SS_nbt_module(nn.Module):
 
         self.conv1x3_2_r = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), bias=True, dilation = (1,dilated))
 
-        self.bn2_r = nn.BatchNorm2d(oup_inc, eps=1e-03)       
-        
+        self.bn2_r = nn.BatchNorm2d(oup_inc, eps=1e-03)
+
         self.relu = nn.ReLU(inplace=True)
-        self.dropout = nn.Dropout2d(dropprob)       
-        
+        self.dropout = nn.Dropout2d(dropprob)
+
     @staticmethod
     def _concat(x,out):
-        return torch.cat((x,out),1)    
-    
+        return torch.cat((x,out),1)
+
     def forward(self, input):
 
         # x1 = input[:,:(input.shape[1]//2),:,:]
@@ -138,8 +138,8 @@ class SS_nbt_module(nn.Module):
         output1 = self.relu(output1)
         output1 = self.conv1x3_2_l(output1)
         output1 = self.bn2_l(output1)
-    
-    
+
+
         output2 = self.conv1x3_1_r(x2)
         output2 = self.relu(output2)
         output2 = self.conv3x1_1_r(output2)
@@ -171,34 +171,34 @@ class Encoder(nn.Module):
 
         for x in range(0, 3):
             self.layers.append(SS_nbt_module(32, 0.03, 1))
-        
+
 
         self.layers.append(DownsamplerBlock(32,64))
-        
+
 
         for x in range(0, 2):
             self.layers.append(SS_nbt_module(64, 0.03, 1))
-  
+
         self.layers.append(DownsamplerBlock(64,128))
 
-        for x in range(0, 1):    
+        for x in range(0, 1):
             self.layers.append(SS_nbt_module(128, 0.3, 1))
             self.layers.append(SS_nbt_module(128, 0.3, 2))
             self.layers.append(SS_nbt_module(128, 0.3, 5))
             self.layers.append(SS_nbt_module(128, 0.3, 9))
-            
-        for x in range(0, 1):    
+
+        for x in range(0, 1):
             self.layers.append(SS_nbt_module(128, 0.3, 2))
             self.layers.append(SS_nbt_module(128, 0.3, 5))
             self.layers.append(SS_nbt_module(128, 0.3, 9))
             self.layers.append(SS_nbt_module(128, 0.3, 17))
-                    
+
 
         # Only in encoder mode:
         self.output_conv = nn.Conv2d(128, num_classes, 1, stride=1, padding=0, bias=True)
 
     def forward(self, input, predict=False):
-        
+
         output = self.initial_block(input)
 
         for layer in self.layers:
@@ -212,14 +212,14 @@ class Encoder(nn.Module):
 class Interpolate(nn.Module):
     def __init__(self,size,mode):
         super(Interpolate,self).__init__()
-        
+
         self.interp = nn.functional.interpolate
         self.size = size
         self.mode = mode
     def forward(self,x):
         x = self.interp(x,size=self.size,mode=self.mode,align_corners=True)
         return x
-        
+
 
 class APN_Module(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -234,50 +234,50 @@ class APN_Module(nn.Module):
 		Conv2dBnRelu(in_ch, out_ch, kernel_size=1, stride=1, padding=0)
 	)
         self.down1 = Conv2dBnRelu(in_ch, 1, kernel_size=7, stride=2, padding=3)
-		
+
         self.down2 = Conv2dBnRelu(1, 1, kernel_size=5, stride=2, padding=2)
-		
+
         self.down3 = nn.Sequential(
 		Conv2dBnRelu(1, 1, kernel_size=3, stride=2, padding=1),
 		Conv2dBnRelu(1, 1, kernel_size=3, stride=1, padding=1)
 	)
-		
+
         self.conv2 = Conv2dBnRelu(1, 1, kernel_size=5, stride=1, padding=2)
         self.conv1 = Conv2dBnRelu(1, 1, kernel_size=7, stride=1, padding=3)
-	
+
     def forward(self, x):
-        
+
         h = x.size()[2]
         w = x.size()[3]
-        
+
         b1 = self.branch1(x)
         # b1 = Interpolate(size=(h, w), mode="bilinear")(b1)
         b1= interpolate(b1, size=(h, w), mode="bilinear", align_corners=True)
-	
+
         mid = self.mid(x)
-		
+
         x1 = self.down1(x)
         x2 = self.down2(x1)
         x3 = self.down3(x2)
         # x3 = Interpolate(size=(h // 4, w // 4), mode="bilinear")(x3)
-        x3= interpolate(x3, size=(h // 4, w // 4), mode="bilinear", align_corners=True)	
+        x3= interpolate(x3, size=(h // 4, w // 4), mode="bilinear", align_corners=True)
         x2 = self.conv2(x2)
         x = x2 + x3
         # x = Interpolate(size=(h // 2, w // 2), mode="bilinear")(x)
         x= interpolate(x, size=(h // 2, w // 2), mode="bilinear", align_corners=True)
-       		
+
         x1 = self.conv1(x1)
         x = x + x1
         # x = Interpolate(size=(h, w), mode="bilinear")(x)
         x= interpolate(x, size=(h, w), mode="bilinear", align_corners=True)
-        		
+
         x = torch.mul(x, mid)
 
         x = x + b1
-       
-       
+
+
         return x
-          
+
 
 
 
@@ -290,7 +290,7 @@ class Decoder (nn.Module):
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=4, stride=2, padding=1, output_padding=0, bias=True)
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True)
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=2, stride=2, padding=0, output_padding=0, bias=True)
-  
+
     def forward(self, input, out_size=None):
         output = self.apn(input)
         if out_size is None:
@@ -303,7 +303,7 @@ class Decoder (nn.Module):
 
 # LEDNet
 class Net(nn.Module):
-    def __init__(self, num_classes, encoder=None):  
+    def __init__(self, num_classes, encoder=None):
         super().__init__()
 
         if (encoder == None):
