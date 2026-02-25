@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import os
 import importlib
 import time
+import sys
 
 from PIL import Image
 from argparse import ArgumentParser
@@ -15,7 +16,11 @@ from torchvision.transforms import ToTensor, ToPILImage
 
 from dataset import cityscapes, ctem
 
-from lednet.py import Net
+cur_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(cur_path)
+sys.path.append(os.path.join(cur_path, '..', 'train'))
+
+from lednet import Net
 
 
 from transform import Relabel, ToLabel, Colorize
@@ -124,6 +129,20 @@ def main(args):
         with torch.no_grad():
             outputs = model(inputs)
 
+        if outputs.shape[2:] != labels.shape[2:]:
+            labels = F.interpolate(labels.float(), size=outputs.shape[2:], mode='nearest').long()
+        labels = labels.clone()
+        labels[labels < 0] = args.ignore_label
+        labels[labels >= NUM_CLASSES] = args.ignore_label
+
+        if args.debug_labels and step == 0:
+            label_min = int(labels.min().item())
+            label_max = int(labels.max().item())
+            pred = outputs.max(1)[1]
+            pred_min = int(pred.min().item())
+            pred_max = int(pred.max().item())
+            print(f"[Debug] labels min/max: {label_min}/{label_max}")
+            print(f"[Debug] preds  min/max: {pred_min}/{pred_max}")
         iouEvalVal.addBatch(outputs.max(1)[1].unsqueeze(1).data, labels)
 
         if args.dataset == 'ctem':
@@ -193,6 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--width', type=int, default=1024)
     parser.add_argument('--ignore-label', type=int, default=255)
     parser.add_argument('--cuda-mem', action='store_true')
+    parser.add_argument('--debug-labels', action='store_true')
 
     args = parser.parse_args()
 

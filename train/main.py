@@ -478,7 +478,9 @@ def main(args):
             own_state = model.state_dict()
             for name, param in state_dict.items():
                 if name not in own_state:
-                     continue
+                    continue
+                if own_state[name].shape != param.shape:
+                    continue
                 own_state[name].copy_(param)
             return model
 

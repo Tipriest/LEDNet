@@ -179,6 +179,8 @@ python train/main.py \
   --savedir ctem_lednet \
   --batch-size 1 \
   --num-epochs 300 \
+  --decoder \
+  --state /home/tipriest/Documents/CVTask/save/ctem_lednet/model_encoder_best.pth \
   --cuda-mem
 
 python test/eval_iou.py \

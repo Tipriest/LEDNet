@@ -44,6 +44,18 @@ class Conv2dBnRelu(nn.Module):
         return self.conv(x)
 
 
+class Conv2dRelu(nn.Module):
+    def __init__(self,in_ch,out_ch,kernel_size=3,stride=1,padding=0,dilation=1,bias=True):
+        super(Conv2dRelu,self).__init__()
+        self.conv = nn.Sequential(
+        nn.Conv2d(in_ch,out_ch,kernel_size,stride,padding,dilation=dilation,bias=bias),
+        nn.ReLU(inplace=True)
+    )
+
+    def forward(self, x):
+        return self.conv(x)
+
+
 # after Concat -> BN, you also can use Dropout like SS_nbt_module may be make a good result!
 class DownsamplerBlock (nn.Module):
     def __init__(self, in_channel, out_channel):
@@ -215,7 +227,7 @@ class APN_Module(nn.Module):
         # global pooling branch
         self.branch1 = nn.Sequential(
                 nn.AdaptiveAvgPool2d(1),
-                Conv2dBnRelu(in_ch, out_ch, kernel_size=1, stride=1, padding=0)
+				Conv2dRelu(in_ch, out_ch, kernel_size=1, stride=1, padding=0)
 	)
         # midddle branch
         self.mid = nn.Sequential(
@@ -273,16 +285,17 @@ class Decoder (nn.Module):
     def __init__(self, num_classes):
         super().__init__()
 
-        self.apn = APN_Module(in_ch=128,out_ch=20)
+        self.apn = APN_Module(in_ch=128,out_ch=num_classes)
         # self.upsample = Interpolate(size=(512, 1024), mode="bilinear")
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=4, stride=2, padding=1, output_padding=0, bias=True)
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True)
         # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=2, stride=2, padding=0, output_padding=0, bias=True)
   
-    def forward(self, input):
-        
+    def forward(self, input, out_size=None):
         output = self.apn(input)
-        out = interpolate(output, size=(512, 1024), mode="bilinear", align_corners=True)
+        if out_size is None:
+            out_size = (512, 1024)
+        out = interpolate(output, size=out_size, mode="bilinear", align_corners=True)
         # out = self.upsample(output)
         # print(out.shape)
         return out
@@ -303,5 +316,6 @@ class Net(nn.Module):
         if only_encode:
             return self.encoder.forward(input, predict=True)
         else:
-            output = self.encoder(input)    
-            return self.decoder.forward(output)
+            output = self.encoder(input)
+            out_size = input.shape[2:]
+            return self.decoder.forward(output, out_size=out_size)

@@ -24,8 +24,15 @@ class iouEval:
             x = x.cuda()
             y = y.cuda()
 
+        if self.ignore_label_value is not None:
+            y = y.clone()
+            y[(y < 0) | (y >= self.nClasses)] = self.ignore_label_value
+
         #if size is "batch_size x 1 x H x W" scatter to onehot
         if (x.size(1) == 1):
+            if x.dtype != torch.long:
+                x = x.long()
+            x = x.clamp(min=0, max=self.nClasses - 1)
             x_onehot = torch.zeros(x.size(0), self.nClasses, x.size(2), x.size(3))
             if x.is_cuda:
                 x_onehot = x_onehot.cuda()
