@@ -59,15 +59,15 @@ class MyCoTransform(object):
             if (hflip < 0.5):
                 input = input.transpose(Image.FLIP_LEFT_RIGHT)
                 target = target.transpose(Image.FLIP_LEFT_RIGHT)
-            
+
             #Random translation 0-2 pixels (fill rest with padding
-            transX = random.randint(-2, 2) 
+            transX = random.randint(-2, 2)
             transY = random.randint(-2, 2)
 
             input = ImageOps.expand(input, border=(transX,transY,0,0), fill=0)
             target = ImageOps.expand(target, border=(transX,transY,0,0), fill=255) #pad label filling with 255
             input = input.crop((0, 0, input.size[0]-transX, input.size[1]-transY))
-            target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))   
+            target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))
 
         input = ToTensor()(input)
         if (self.enc):
@@ -183,9 +183,9 @@ def train(args, model, enc=False):
         modeltxtpath = savedir + "/model_encoder.txt"
     else:
         automated_log_path = savedir + "/automated_log.txt"
-        modeltxtpath = savedir + "/model.txt"    
+        modeltxtpath = savedir + "/model.txt"
 
-    if (not os.path.exists(automated_log_path)):    #dont add first line if it exists 
+    if (not os.path.exists(automated_log_path)):    #dont add first line if it exists
         with open(automated_log_path, "a") as myfile:
             myfile.write("Epoch\t\tTrain-loss\t\tTest-loss\t\tTrain-IoU\t\tTest-IoU\t\tlearningRate")
 
@@ -193,15 +193,15 @@ def train(args, model, enc=False):
         myfile.write(str(model))
 
 
-    #TODO: reduce memory in first gpu: https://discuss.pytorch.org/t/multi-gpu-training-memory-usage-in-balance/4163/4        
+    #TODO: reduce memory in first gpu: https://discuss.pytorch.org/t/multi-gpu-training-memory-usage-in-balance/4163/4
 	#https://github.com/pytorch/pytorch/issues/1893
 
     #optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=2e-4)     ## scheduler 1
-    optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)      ## scheduler 2  
+    optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)      ## scheduler 2
 
     start_epoch = 1
     if args.resume:
-        #Must load weights, optimizer, epoch and best value. 
+        #Must load weights, optimizer, epoch and best value.
         if enc:
             filenameCheckpoint = savedir + '/checkpoint_enc.pth.tar'
         else:
@@ -232,9 +232,9 @@ def train(args, model, enc=False):
 
         epoch_loss = []
         time_train = []
-     
-        doIouTrain = args.iouTrain   
-        doIouVal =  args.iouVal      
+
+        doIouTrain = args.iouTrain
+        doIouVal =  args.iouVal
 
         if (doIouTrain):
             iouEvalTrain = iouEval(NUM_CLASSES, ignoreIndex=-1, ignore_label_value=args.ignore_label)
@@ -251,12 +251,12 @@ def train(args, model, enc=False):
 
             imgs_batch = images.shape[0]
             if imgs_batch != args.batch_size:
-                break            
-            
+                break
+
             if args.cuda:
                 inputs = images.cuda()
-                targets = labels.cuda()           
-            
+                targets = labels.cuda()
+
             outputs = model(inputs, only_encode=enc)
             targets = _resize_target_like(outputs, targets)
 
@@ -264,7 +264,7 @@ def train(args, model, enc=False):
 
             optimizer.zero_grad()
             loss = criterion(outputs, targets[:, 0])
-            
+
             loss.backward()
             optimizer.step()
 
@@ -274,7 +274,7 @@ def train(args, model, enc=False):
             if (doIouTrain):
                 #start_time_iou = time.time()
                 iouEvalTrain.addBatch(outputs.max(1)[1].unsqueeze(1).data, targets.data)
-                #print ("Time to add confusion matrix: ", time.time() - start_time_iou)      
+                #print ("Time to add confusion matrix: ", time.time() - start_time_iou)
 
             #print(outputs.size())
             if args.visualize and args.steps_plot > 0 and step % args.steps_plot == 0:
@@ -296,17 +296,17 @@ def train(args, model, enc=False):
                 print ("Time to paint images: ", time.time() - start_time_plot)
             if args.steps_loss > 0 and step % args.steps_loss == 0:
                 average = sum(epoch_loss) / len(epoch_loss)
-                print(f'loss: {average:0.4} (epoch: {epoch}, step: {step})', 
+                print(f'loss: {average:0.4} (epoch: {epoch}, step: {step})',
                         "// Avg time/img: %.4f s" % (sum(time_train) / len(time_train) / args.batch_size))
 
-            
+
         average_epoch_loss_train = sum(epoch_loss) / len(epoch_loss)
-        
+
         iouTrain = 0
         if (doIouTrain):
             iouTrain, iou_classes = iouEvalTrain.getIoU()
             iouStr = getColorEntry(iouTrain)+'{:0.2f}'.format(iouTrain*100) + '\033[0m'
-            print ("EPOCH IoU on TRAIN set: ", iouStr, "%")  
+            print ("EPOCH IoU on TRAIN set: ", iouStr, "%")
 
         #Validate on 500 val images after each epoch of training
         print("----- VALIDATING - EPOCH", epoch, "-----")
@@ -322,16 +322,16 @@ def train(args, model, enc=False):
 
             imgs_batch = images.shape[0]
             if imgs_batch != args.batch_size:
-                break              
-            
+                break
+
             if args.cuda:
                 images = images.cuda()
                 labels = labels.cuda()
 
             with torch.no_grad():
-                inputs = Variable(images)     
+                inputs = Variable(images)
                 targets = Variable(labels)
-            
+
             outputs = model(inputs, only_encode=enc)
             targets = _resize_target_like(outputs, targets)
 
@@ -361,9 +361,9 @@ def train(args, model, enc=False):
                 print ("Time to paint images: ", time.time() - start_time_plot)
             if args.steps_loss > 0 and step % args.steps_loss == 0:
                 average = sum(epoch_loss_val) / len(epoch_loss_val)
-                print(f'VAL loss: {average:0.4} (epoch: {epoch}, step: {step})', 
+                print(f'VAL loss: {average:0.4} (epoch: {epoch}, step: {step})',
                         "// Avg time/img: %.4f s" % (sum(time_val) / len(time_val) / args.batch_size))
-                       
+
 
         average_epoch_loss_val = sum(epoch_loss_val) / len(epoch_loss_val)
         #scheduler.step(average_epoch_loss_val, epoch)  ## scheduler 1   # update lr if needed
@@ -372,22 +372,22 @@ def train(args, model, enc=False):
         if (doIouVal):
             iouVal, iou_classes = iouEvalVal.getIoU()
             iouStr = getColorEntry(iouVal)+'{:0.2f}'.format(iouVal*100) + '\033[0m'
-            print ("EPOCH IoU on VAL set: ", iouStr, "%") 
+            print ("EPOCH IoU on VAL set: ", iouStr, "%")
 
         if args.cuda_mem:
             print_cuda_mem(tag=f"epoch-{epoch}")
-           
+
 
         # remember best valIoU and save checkpoint
         if iouVal == 0:
             current_acc = -average_epoch_loss_val
         else:
-            current_acc = iouVal 
+            current_acc = iouVal
         is_best = current_acc > best_acc
         best_acc = max(current_acc, best_acc)
         if enc:
             filenameCheckpoint = savedir + '/checkpoint_enc.pth.tar'
-            filenameBest = savedir + '/model_best_enc.pth.tar'    
+            filenameBest = savedir + '/model_best_enc.pth.tar'
         else:
             filenameCheckpoint = savedir + '/checkpoint.pth.tar'
             filenameBest = savedir + '/model_best.pth.tar'
@@ -414,16 +414,16 @@ def train(args, model, enc=False):
             print(f'save: {filenamebest} (epoch: {epoch})')
             if (not enc):
                 with open(savedir + "/best.txt", "w") as myfile:
-                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))   
+                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))
             else:
                 with open(savedir + "/best_encoder.txt", "w") as myfile:
-                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))           
+                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))
 
         #SAVE TO FILE A ROW WITH THE EPOCH RESULT (train loss, val loss, train IoU, val IoU)
         #Epoch		Train-loss		Test-loss	Train-IoU	Test-IoU		learningRate
         with open(automated_log_path, "a") as myfile:
             myfile.write("\n%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.8f" % (epoch, average_epoch_loss_train, average_epoch_loss_val, iouTrain, iouVal, usedLr ))
-    
+
     return(model)   #return model (convenience for encoder-decoder training)
 
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
@@ -457,10 +457,10 @@ def main(args):
     model_file = importlib.import_module(args.model)
     model = model_file.Net(NUM_CLASSES)
     copyfile(model_path, savedir + '/' + args.model + ".py")
-    
+
     if args.cuda:
         model = torch.nn.DataParallel(model).cuda()
-    
+
     if args.state:
         #if args.state is provided then load this state for training
         #Note: this only loads initialized weights. If you want to resume a training use "--resume" option!!
@@ -500,7 +500,7 @@ def main(args):
     #TO ACCESS MODEL IN DataParallel: next(model.children())
     #next(model.children()).decoder.apply(weights_init)
     #Reinitialize weights for decoder
-    
+
     next(model.children()).decoder.layers.apply(weights_init)
     next(model.children()).decoder.output_conv.apply(weights_init)
 
@@ -514,7 +514,7 @@ def main(args):
     if (not args.decoder):
         print("========== ENCODER TRAINING ===========")
         model = train(args, model, True) #Train encoder
-    #CAREFUL: for some reason, after training encoder alone, the decoder gets weights=0. 
+    #CAREFUL: for some reason, after training encoder alone, the decoder gets weights=0.
     #We must reinit decoder weights or reload network passing only encoder in order to train decoder
     print("========== DECODER TRAINING ===========")
     if (not args.state):
@@ -561,8 +561,8 @@ if __name__ == '__main__':
     parser.add_argument('--cuda-mem', action='store_true')
 
     parser.add_argument('--iouTrain', action='store_true', default=True) #recommended: False (takes more time to train otherwise)
-    parser.add_argument('--iouVal', action='store_true', default=True)  
-    parser.add_argument('--resume', action='store_true')    #Use this flag to load last checkpoint for training  
+    parser.add_argument('--iouVal', action='store_true', default=True)
+    parser.add_argument('--resume', action='store_true')    #Use this flag to load last checkpoint for training
 
     args = parser.parse_args()
 

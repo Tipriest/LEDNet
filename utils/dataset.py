@@ -63,8 +63,8 @@ class cityscapes(Dataset):
 
     def __init__(self, root, co_transform=None, subset='train'):
         self.images_root = os.path.join(root, 'leftImg8bit/')
-        self.labels_root = os.path.join(root, 'gtFine/')       
-        #self.labels_root = os.path.join(root, 'gtCoarse/') 
+        self.labels_root = os.path.join(root, 'gtFine/')
+        #self.labels_root = os.path.join(root, 'gtCoarse/')
         self.images_root += subset
         self.labels_root += subset
 

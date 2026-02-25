@@ -12,11 +12,11 @@ class iouEval:
         classes = self.nClasses if self.ignoreIndex==-1 else self.nClasses-1
         self.tp = torch.zeros(classes).double()
         self.fp = torch.zeros(classes).double()
-        self.fn = torch.zeros(classes).double()        
+        self.fn = torch.zeros(classes).double()
 
     def addBatch(self, x, y):   #x=preds, y=targets
         #sizes should be "batch_size x nClasses x H x W"
-        
+
         #print ("X is cuda: ", x.is_cuda)
         #print ("Y is cuda: ", y.is_cuda)
 
@@ -26,7 +26,7 @@ class iouEval:
 
         #if size is "batch_size x 1 x H x W" scatter to onehot
         if (x.size(1) == 1):
-            x_onehot = torch.zeros(x.size(0), self.nClasses, x.size(2), x.size(3))  
+            x_onehot = torch.zeros(x.size(0), self.nClasses, x.size(2), x.size(3))
             if x.is_cuda:
                 x_onehot = x_onehot.cuda()
             x_onehot.scatter_(1, x, 1).float()
@@ -61,7 +61,7 @@ class iouEval:
         fpmult = x_onehot * (1-y_onehot-ignores) #times prediction says its that class and gt says its not (subtracting cases when its ignore label!)
         fp = torch.sum(torch.sum(torch.sum(fpmult, dim=0, keepdim=True), dim=2, keepdim=True), dim=3, keepdim=True).squeeze()
         fnmult = (1-x_onehot) * (y_onehot) #times prediction says its not that class and gt says it is
-        fn = torch.sum(torch.sum(torch.sum(fnmult, dim=0, keepdim=True), dim=2, keepdim=True), dim=3, keepdim=True).squeeze() 
+        fn = torch.sum(torch.sum(torch.sum(fnmult, dim=0, keepdim=True), dim=2, keepdim=True), dim=3, keepdim=True).squeeze()
 
         self.tp += tp.double().cpu()
         self.fp += fp.double().cpu()
